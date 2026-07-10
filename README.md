@@ -57,6 +57,3 @@ keyPassword=...
 - 商店清单草稿：`docs/release/store-listing-zh.md`
 - 发布 checklist：`docs/release/release-checklist.md`
 
-## 贡献
-
-当前仅 Rosir 作为 commit 与代码贡献者（参见 `CONTRIBUTORS`）。
