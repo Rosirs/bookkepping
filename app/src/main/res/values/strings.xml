@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">自动记账</string>
+    <string name="notification_listener_label">自动记账通知读取</string>
+    <string name="notification_permission_title">开启通知读取</string>
+    <string name="notification_permission_body">用于识别支付宝、微信、银行等通知中的收支信息，并只在本机保存账单。</string>
+</resources>
