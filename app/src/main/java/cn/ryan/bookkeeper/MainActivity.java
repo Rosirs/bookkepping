@@ -56,7 +56,7 @@ public final class MainActivity extends Activity {
         root.setOnApplyWindowInsetsListener((v,insets)-> { v.setPadding(dp(20),insets.getSystemWindowInsetTop()+dp(12),dp(20),insets.getSystemWindowInsetBottom()+dp(8)); return insets; });
         setContentView(root); root.requestApplyInsets();
         LinearLayout head=row();weighted(head,text(getString(R.string.app_name),27,INK,true));head.addView(text("CNY · 本地",12,MUTED,false));root.addView(head);gap(root,18);
-        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);content=column();scroll.addView(content);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setVerticalScrollBarEnabled(false);scroll.setHorizontalScrollBarEnabled(false);content=column();scroll.addView(content);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         try { if(page==2) settings(); else { monthPicker();gap(content,16); if(page==0) ledger();else statistics(); } }
         catch(Exception e) { error(e); }
         gap(root,10);
@@ -72,7 +72,8 @@ public final class MainActivity extends Activity {
     }
     private void metric(LinearLayout parent,String label,long fen,int color,int size) { parent.addView(text(label,12,color,false));gap(parent,6);TextView value=text(LedgerRules.money(fen),size,color,true);value.setSingleLine(true);value.setAutoSizeTextTypeUniformWithConfiguration(12,size,1,android.util.TypedValue.COMPLEX_UNIT_SP);parent.addView(value); }
     private void ledger() throws Exception {
-        JSONObject sum=db.summary(month.toString());LinearLayout hero=card(content);hero.setBackground(shape(HERO,22));
+        JSONObject sum=db.summary(month.toString());LinearLayout hero=card(content);hero.setBackground(new ParrotCardBackground(getResources()));
+        hero.setClipToOutline(true);hero.setOutlineProvider(new ViewOutlineProvider(){@Override public void getOutline(View view,android.graphics.Outline outline){outline.setRoundRect(0,0,view.getWidth(),view.getHeight(),dp(22));}});
         hero.addView(text(month.getMonthValue()+"月 · 生活支出",13,HERO_MUTED,false));gap(hero,8);hero.addView(text("¥ "+LedgerRules.money(sum.getLong("expense_fen")),36,HERO_AMOUNT,true));gap(hero,22);
         LinearLayout numbers=row(),today=column(),income=column(),balance=column();metric(today,"今日支出",db.expenseOn(LocalDate.now()),HERO_AMOUNT,21);metric(income,"月收入",sum.getLong("income_fen"),Color.WHITE,21);metric(balance,"生活结余",sum.getLong("balance_fen"),Color.WHITE,21);weighted(numbers,today);weighted(numbers,income);weighted(numbers,balance);hero.addView(numbers);
         gap(content,14);budgetCard(sum);
@@ -94,9 +95,7 @@ public final class MainActivity extends Activity {
         gap(content,20);
     }
     private void statistics() throws Exception {
-        JSONObject sum=db.summary(month.toString());LinearLayout box=card(content);
-        metric(box,"本月生活结余",sum.getLong("balance_fen"),PRIMARY,34);gap(box,10);box.addView(text("收入 − 日常支出；投资单独计算",12,MUTED,false));gap(content,18);
-        budgetCard(sum);gap(content,18);
+        JSONObject sum=db.summary(month.toString());statisticsOverview(sum);gap(content,18);
         LinearLayout categories=card(content);categories.addView(text("钱花在哪里",19,INK,true));gap(categories,16);
         JSONObject values=sum.getJSONObject("expense_categories");ArrayList<String> keys=new ArrayList<>();values.keys().forEachRemaining(keys::add);keys.sort((a,b)->Long.compare(values.optLong(b),values.optLong(a)));
         if(keys.isEmpty())categories.addView(text("本月还没有支出",14,MUTED,false));
@@ -104,6 +103,37 @@ public final class MainActivity extends Activity {
         gap(content,18);LinearLayout invest=card(content);invest.addView(text("投资 · 附加记录",19,INK,true));gap(invest,14);
         metric(invest,"本月投入",sum.getLong("invest_fen"),INK,23);gap(invest,12);metric(invest,"本月收回",sum.getLong("redeem_fen"),INK,23);gap(invest,12);
         metric(invest,"累计净投入",db.summary(null).getLong("net_invested_fen"),PRIMARY,26);gap(invest,12);invest.addView(text("累计投入 − 累计收回。\n这是资金流记录，不代表持仓市值或投资盈亏。",12,MUTED,false));gap(content,20);
+    }
+    private void statHeading(LinearLayout parent,String title,int icon,int color) {
+        LinearLayout heading=row();heading.addView(new StatsIcon(this,icon,color),new LinearLayout.LayoutParams(dp(20),dp(20)));
+        Space space=new Space(this);heading.addView(space,new LinearLayout.LayoutParams(dp(7),1));heading.addView(text(title,12,color,false));parent.addView(heading);
+    }
+    private Set<String> foodCategories() {
+        return new HashSet<>(getSharedPreferences("statistics",MODE_PRIVATE).getStringSet("food_categories",SpendingInsights.DEFAULT_FOOD));
+    }
+    private void statisticsOverview(JSONObject sum) throws Exception {
+        long income=sum.getLong("income_fen"),expense=sum.getLong("expense_fen"),balance=sum.getLong("balance_fen");
+        JSONObject categories=sum.getJSONObject("expense_categories");Map<String,Long> amounts=new HashMap<>();
+        Iterator<String> names=categories.keys();while(names.hasNext()){String name=names.next();amounts.put(name,categories.getLong(name));}
+        JSONArray entries=db.entries(month.toString());int expenseCount=0;for(int i=0;i<entries.length();i++)if("expense".equals(entries.getJSONObject(i).getString("type")))expenseCount++;
+        SpendingInsights insight=new SpendingInsights(income,expense,amounts,foodCategories(),expenseCount);
+        LinearLayout box=card(content);box.addView(text("消费指标",19,INK,true));gap(box,16);
+        LinearLayout indicators=row(),engel=column(),surplus=column();engel.setPadding(dp(12),dp(12),dp(10),dp(12));engel.setBackground(shape(SOFT,14));
+        statHeading(engel,"恩格尔系数  ›",3,PRIMARY);gap(engel,8);metricValue(engel,insight.engel,26,PRIMARY);gap(engel,5);engel.addView(text("食品烟酒占比 · 可调整",10,MUTED,false));engel.setContentDescription("恩格尔系数 "+insight.engel+"，点击调整食品烟酒分类");engel.setOnClickListener(v->editFoodCategories(categories));
+        surplus.setPadding(dp(14),dp(12),0,dp(12));statHeading(surplus,"结余率",0,MUTED);gap(surplus,8);metricValue(surplus,insight.surplus,26,balance<0?DANGER:POSITIVE);gap(surplus,5);surplus.addView(text(income==0?"暂无收入，暂不计算":"生活结余 ÷ 收入",10,MUTED,false));weighted(indicators,engel);weighted(indicators,surplus);box.addView(indicators);gap(box,14);
+        box.addView(text("支出 "+expenseCount+" 笔  ·  平均每笔 "+(expenseCount==0?"暂无":"¥"+LedgerRules.money(insight.averageExpense)),12,MUTED,false));gap(box,8);
+        box.addView(text("按所选月份已记账数据计算，投资单独记录。",11,MUTED,false));
+    }
+    private void metricValue(LinearLayout parent,String value,int size,int color) {
+        TextView label=text(value,size,color,true);label.setSingleLine(true);label.setAutoSizeTextTypeUniformWithConfiguration(12,size,1,android.util.TypedValue.COMPLEX_UNIT_SP);parent.addView(label);
+    }
+    private void editFoodCategories(JSONObject amounts) {
+        Set<String> selected=foodCategories();TreeSet<String> all=new TreeSet<>(SpendingInsights.DEFAULT_FOOD);all.addAll(selected);amounts.keys().forEachRemaining(all::add);
+        String[] names=all.toArray(new String[0]);boolean[] checked=new boolean[names.length];for(int i=0;i<names.length;i++)checked[i]=selected.contains(names[i]);
+        new AlertDialog.Builder(this).setTitle("食品烟酒分类 · 恩格尔系数")
+            .setMultiChoiceItems(names,checked,(dialog,index,on)->checked[index]=on)
+            .setNeutralButton("计算说明",(dialog,which)->new AlertDialog.Builder(this).setTitle("指标计算口径").setMessage("恩格尔系数 = 所选分类的日常支出 ÷ 日常总支出 × 100%。默认包含餐饮、食品、买菜、零食、饮品、烟酒等；混合购物类需要按实际用途拆分记账。选择保存后适用于所有月份。\n\n结余率 =（收入 − 日常支出）÷ 收入 × 100%，可为负数。无收入时不计算。\n\n平均每笔 = 日常支出 ÷ 支出笔数，金额向下取整到分。所有指标均不包含投资记录，仅反映已记录数据。").setPositiveButton("知道了",null).show())
+            .setNegativeButton("取消",null).setPositiveButton("保存",(dialog,which)->{Set<String> chosen=new HashSet<>();for(int i=0;i<names.length;i++)if(checked[i])chosen.add(names[i]);getSharedPreferences("statistics",MODE_PRIVATE).edit().putStringSet("food_categories",chosen).apply();render();}).show();
     }
     private void budgetCard(JSONObject sum) {
         BudgetStatus plan=new BudgetStatus(month,db.budgetFen(month.toString()),sum.optLong("expense_fen"),LocalDate.now());
@@ -141,12 +171,25 @@ public final class MainActivity extends Activity {
         content.addView(text("数据由你掌握",18,INK,true));gap(content,12);
         content.addView(button("导出 JSON 备份",()->{Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/json");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"own-ledger-"+LocalDate.now()+".json");startActivityForResult(i,10);},false));gap(content,10);
         content.addView(button("导入 JSON 备份",()->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("application/json");i.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,11);},false));gap(content,8);content.addView(text("导入按账目 ID 合并，同 ID 使用备份内容覆盖。",12,MUTED,false));gap(content,24);
+        content.addView(button("数据存储与卸载说明",this::showDataStorageInfo,false));gap(content,24);
         LinearLayout integration=card(content);integration.addView(text("大模型接口",19,INK,true));gap(integration,10);integration.addView(text("只读 API，仅在前台手动开启时运行。\n地址 127.0.0.1:18765，离开应用即关闭。\n桌面可通过 USB 与 adb forward 访问。",13,MUTED,false));gap(integration,12);
         integration.addView(button(api==null?"开启本机 API":"关闭本机 API",()->{if(api!=null)stopApi();else try {api=new LocalApi(db,token());}catch(Exception e){error(e);}render();},false));
         if(api!=null) { gap(integration,12);TextView credential=text("Bearer "+token(),12,INK,false);credential.setTextIsSelectable(true);integration.addView(credential);gap(integration,8);integration.addView(text("GET /v1/summary?month="+month+"\nGET /v1/entries?month="+month,12,MUTED,false)); }
         gap(content,20);content.addView(text(getString(R.string.app_name)+"  "+BuildConfig.VERSION_NAME,12,MUTED,false));
     }
     private String token() { android.content.SharedPreferences p=getSharedPreferences("api",MODE_PRIVATE);String t=p.getString("token",null);if(t==null){t=UUID.randomUUID().toString()+UUID.randomUUID().toString();p.edit().putString("token",t).apply();}return t; }
+    private void showDataStorageInfo() {
+        try(InputStream in=getAssets().open("data-storage.txt")) {
+            ByteArrayOutputStream out=new ByteArrayOutputStream();byte[] buffer=new byte[4096];int count;
+            while((count=in.read(buffer))!=-1)out.write(buffer,0,count);
+            String document=out.toString(StandardCharsets.UTF_8.name())
+                    .replace("{{DATABASE_PATH}}",getDatabasePath("ledger.db").getAbsolutePath())
+                    .replace("{{DATA_PATH}}",getApplicationInfo().dataDir);
+            TextView body=text(document,15,INK,false);body.setTextIsSelectable(true);body.setLineSpacing(dp(4),1);body.setPadding(dp(24),dp(12),dp(24),dp(16));
+            ScrollView scroll=new ScrollView(this);scroll.addView(body);
+            new AlertDialog.Builder(this).setTitle("数据存储与卸载说明").setView(scroll).setPositiveButton("知道了",null).show();
+        }catch(IOException e){error(e);}
+    }
     private void stopApi() { if(api!=null){api.close();api=null;} }
     @Override protected void onActivityResult(int request,int result,Intent data) {
         super.onActivityResult(request,result,data);if(result!=RESULT_OK||data==null||data.getData()==null)return;

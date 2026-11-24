@@ -1,0 +1,25 @@
+{
+  "tool": "built-in image_gen",
+  "concepts": [
+    {
+      "id": "A-ledger",
+      "label": "A — 金色账本",
+      "prompt": "Use case: logo-brand. Asset type: Android launcher icon concept for a minimalist personal expense diary app named 有钱日记. Generate ONE square standalone icon, not a contact sheet. Background fills the entire square canvas edge-to-edge in deep ink forest #282E29, no outer border or mockup. Main symbol centered with generous 22% safe margins so Android circle/squircle masks preserve it. Palette exclusively forest #282E29, warm gold #F3D48A and ivory #F7F5F0. Visually legible at 48px. No lettering, words, numbers, labels, watermarks, currency signs, graphs, extra decorations, devices or presentation context. A distinctive minimal closed diary / ledger book, pale warm gold cover, dark forest spine, one beautifully integrated short ledger line and small circular clasp. Bold simple silhouette, refined flat geometric shapes with just a subtle embossed edge, understated premium stationery feel."
+    },
+    {
+      "id": "B-coin",
+      "label": "B — 铜钱书签",
+      "prompt": "Use case: logo-brand. Asset type: Android launcher icon concept for a minimalist personal expense diary app named 有钱日记. Generate ONE square standalone icon, not a contact sheet. Background fills the entire square canvas edge-to-edge in deep ink forest #282E29, no outer border or mockup. Main symbol centered with generous 22% safe margins so Android circle/squircle masks preserve it. Palette exclusively forest #282E29, warm gold #F3D48A and ivory #F7F5F0. Visually legible at 48px. No lettering, words, numbers, labels, watermarks, currency signs, graphs, extra decorations, devices or presentation context. A single bold ancient Chinese round coin with a square hole, cleverly fused with a bookmark ribbon extending downward so the coin becomes a diary bookmark. Restrained contemporary Eastern graphic design, warm gold symbol on near-black forest green. Simple striking silhouette, perfectly balanced."
+    },
+    {
+      "id": "C-wallet",
+      "label": "C — 微笑钱包",
+      "prompt": "Use case: logo-brand. Asset type: Android launcher icon concept for a minimalist personal expense diary app named 有钱日记. Generate ONE square standalone icon, not a contact sheet. Background fills the entire square canvas edge-to-edge in deep ink forest #282E29, no outer border or mockup. Main symbol centered with generous 22% safe margins so Android circle/squircle masks preserve it. Palette exclusively forest #282E29, warm gold #F3D48A and ivory #F7F5F0. Visually legible at 48px. No lettering, words, numbers, labels, watermarks, currency signs, graphs, extra decorations, devices or presentation context. A friendly rounded small wallet in golden ochre with a tiny curved smile seamlessly integrated in its front seam, one cream receipt peeking out. Warm approachable soft 3D clay with gentle volume, restrained sophistication, broad simple silhouette, not a cartoon face with eyes."
+    },
+    {
+      "id": "D-monogram",
+      "label": "D — 日记字标",
+      "prompt": "Use case: logo-brand. Asset type: Android launcher icon concept for a minimalist personal expense diary app named 有钱日记. Generate ONE square standalone icon, not a contact sheet. Background fills the entire square canvas edge-to-edge in deep ink forest #282E29, no outer border or mockup. Main symbol centered with generous 22% safe margins so Android circle/squircle masks preserve it. Palette exclusively forest #282E29, warm gold #F3D48A and ivory #F7F5F0. Visually legible at 48px. No lettering, words, numbers, labels, watermarks, currency signs, graphs, extra decorations, devices or presentation context. An original thick geometric monogram inspired by the Chinese character 日, shaped as a small diary with rounded corners and a horizontal divider, a tiny gold bookmark at its upper edge gives a unique recognizable accent. Cream primary symbol with gold accent, highly reduced contemporary typographic logo, precise flat geometry."
+    }
+  ]
+}
