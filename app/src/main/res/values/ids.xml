@@ -1,0 +1,12 @@
+<resources>
+    <item name="entry_amount" type="id" />
+    <item name="entry_save" type="id" />
+    <item name="entry_date" type="id" />
+    <item name="entry_note" type="id" />
+    <item name="entry_delete" type="id" />
+    <item name="budget_amount" type="id" />
+    <item name="budget_edit" type="id" />
+    <item name="nav_details" type="id" />
+    <item name="nav_statistics" type="id" />
+    <item name="nav_settings" type="id" />
+</resources>

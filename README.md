@@ -1,59 +1,73 @@
-# 自动记账 (BookKeeping)
+# 有钱日记
 
-一款简单的 Android 本地记账 App：通过通知读取识别支付宝、微信、银行等应用发出的收支信息，并在本机自动生成账单。仅在本地保存财务数据，不上传到服务器、不依赖账号登录。
+面向个人日常使用的极简原生 Android 记账软件。无注册、无广告、无云端依赖。Android 8.0 及以上，人民币单币种。
 
-## 功能
+## 已实现
 
-- 通知栏监听识别收支
-- 本地 Room 数据库存储
-- 自动去重（按包名、金额、方向、分钟桶、内容指纹）
-- 收入、支出、结余汇总
-- 账单编辑（金额、方向、商户、备注）与删除
-- 通知来源白名单 + 文本最小化（自动遮蔽验证码/链接）
-- 仅本地数据，禁止云端备份/设备转出
+- 收入、支出：底部记账面板、大号金额、专用数字键盘、分类点选、日期和可选备注；点击已有账目编辑或删除。
+- 月份切换、按日流水、今日支出、当月收入／支出／生活结余、消费分类统计。
+- 每月独立的生活预算：剩余额度、含今天的剩余天数、日均可用金额和超支提示；首页和统计页都能设置。
+- 分类按账单使用次数、最近记账日期排序，包含自定义分类；前七项快捷选择，其余从「更多」进入。
+- 投资附加记录：投入、收回、累计净投入，与日常收支分开统计。
+- JSON 导出、合并导入；重复导入不会新增重复 ID。导入错误时整个事务回滚。
+- 手动开启、仅前台运行的带 Bearer 鉴权的本机只读 HTTP API。
 
-## 环境
+数据保存在应用私有 SQLite 中，金额使用整数分。生活结余 = 收入 − 生活支出。累计投资净投入 = 全部投资投入 − 全部投资收回，不代表资产市值或盈亏。未实现行情、账户余额、自动扣款识别、云同步或内置模型。
 
-- compile / target SDK 36
-- min SDK 26
-- AGP 8.13.0、Gradle 8.13
-- Kotlin 1.9.20、Compose BOM 2023.10.01
-- Android Studio 自带 JBR（系统 Java 缺 `javac`）
+## 安装
 
-## 构建
+构建后将 `app/build/outputs/apk/debug/app-debug.apk` 传到安卓手机，点击安装。也可在开启 USB 调试、连接电脑后运行：
 
-设置本地 JBR 与 SDK：
-
-```bash
-ANDROID_HOME=/home/robin/Android/Sdk ./gradlew <task>
+```sh
+adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-常用任务：
+当前为 debug 试用版；后续长期发布需要固定签名密钥。卸载会删除账本，请先从「设置」导出备份。JSON 备份为明文，请保存在自己的可信存储位置。
 
-```bash
-./gradlew :app:testDebugUnitTest
-./gradlew :app:lintDebug
-./gradlew :app:assembleDebug
-./gradlew :app:assembleRelease
-./gradlew :app:bundleRelease
+## 构建与验证
+
+使用 JDK 17、Android SDK platform 35、build-tools 35.0.0、Gradle 8.11.1 和 AGP 8.9.2。Android Studio 可以直接打开本目录。命令行：
+
+```sh
+export JAVA_HOME=/path/to/jdk17
+export ANDROID_HOME=/path/to/android-sdk
+./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
+sh scripts/test-rules.sh
 ```
 
-## Release 签名
+本次会话下载的临时构建环境位于忽略目录 `.tools/`，不改动全局 Java/SDK 配置。应用运行时无第三方依赖；Robolectric 和 JUnit 只用于开发测试。
 
-发布签名密钥**不在**本仓库内。密钥和密码由环境变量或 `~/.gradle/bookkeeping-signing.properties` 提供：
+2026-11-24 验证结果：APK 构建和签名验证通过；23 项金额／日期／输入检查通过；16 项 Robolectric 集成测试通过，覆盖表单保存、三页运行、数据库持久化、投资统计分离、导入回滚、API 鉴权、旧数据库升级、预算边界与分类排序。Android Lint 无问题。已通过无线 ADB 在小米手机上安装，并检查首页、新版记账面板和预算设置显示；系统文件选择器和端口转发链路尚未完整验证。
 
-```properties
-storeFile=/home/robin/.gradle/bookkeeping-upload.jks
-storePassword=...
-keyAlias=bookkeeping_upload
-keyPassword=...
+## 月预算与升级
+
+在首页或统计页点击预算卡片的「设置」，输入所选月份的生活消费预算。各月独立设置，可调整或移除；收入和投资不抵扣预算。日均可用金额向下取整到分，当月包含今天；已结束月份不再显示日均额度。首页「今日支出」始终统计手机本地今天，与浏览的月份无关。
+
+0.2.0 会自动升级数据库并保留原账单。新备份格式包含月预算，仍可导入旧版账单备份；旧版应用无法读取新格式。升级后请使用新的 APK。
+
+## 接大模型
+
+第一版提供 API，不要求任何模型供应商或密钥，也不会自动向模型发送数据。可以让自己的模型工具调用只读接口，获得某月的收支汇总和明细，未来再包装成 MCP。
+
+1. 在应用「设置」开启本机 API，复制页面中的 token。应用需保持前台。
+2. USB 连接手机，在桌面运行端口转发。
+3. 使用 HTTP 客户端携带 token 访问。
+
+```sh
+adb forward tcp:18765 tcp:18765
+# 将 LEDGER_TOKEN 设置为手机显示的 Bearer 后面的值
+curl -H "Authorization: Bearer $LEDGER_TOKEN" \
+  'http://127.0.0.1:18765/v1/summary?month=2026-11'
+curl -H "Authorization: Bearer $LEDGER_TOKEN" \
+  'http://127.0.0.1:18765/v1/entries?month=2026-11'
+# 使用完毕
+adb forward --remove tcp:18765
 ```
 
-可通过 `BOOKKEEPING_SIGNING_PROPERTIES=/path/to/signing.properties` 指定其他位置。
+接口只监听 `127.0.0.1:18765`，不监听局域网。省略 month 时使用手机当前月份。所有金额字段以 `_fen` 结尾，单位为分。没有写接口，没有 CORS 放行。退出应用／切到后台会关闭 API，再使用需手动开启。凭证不应写入代码仓库或模型对话。
 
-## 隐私与上架
+返回状态：200 成功；400 月份参数错误；401 凭证错误；404 路由不存在；405 不支持写入方法。契约见 [API 文档](docs/API.md)。
 
-- 隐私政策草稿：`docs/release/privacy-policy-zh.md`
-- 商店清单草稿：`docs/release/store-listing-zh.md`
-- 发布 checklist：`docs/release/release-checklist.md`
+## REA 阅读结果
 
+见 [REA 与鲨鱼记账研究记录](docs/REA.md)。当前版本是按个人需求独立实现，没有把未经分析的鲨鱼记账行为当作已验证事实。

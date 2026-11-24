@@ -1,22 +1,17 @@
+.tools/
 .gradle/
-build/
-app/build/
+**/build/
 local.properties
-
-# Signing material
-keystore.properties
 *.jks
-*.keystore
-keystore/
-
-# IDE and OS files
-.idea/
-*.iml
 .DS_Store
-
-# Claude Code local scratch output
-.claude/
-*.output
-
-# Local keytool debug logs
-keytool-create.log
+dist/
+*.apk
+*.aab
+*.keystore
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+.env
+.env.*
+!.env.example
