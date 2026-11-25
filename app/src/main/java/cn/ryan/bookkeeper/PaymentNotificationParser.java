@@ -21,7 +21,7 @@ final class PaymentNotificationParser {
         Set<Long> amounts=new HashSet<>();Matcher m=MONEY.matcher(text);
         while(m.find())try{amounts.add(LedgerRules.parseAmount(m.group(1)!=null?m.group(1):m.group(2)));}catch(IllegalArgumentException ignored){}
         long fen=amounts.size()==1?amounts.iterator().next():0;
-        boolean special=text.matches("(?s).*(退款|退回|撤销|失败|关闭|还款|提现|转账|余额|剩余|待支付|待付款|待收款|申请|处理中).*"), income=text.matches("(?s).*(收款|到账|收入).*"), expense=text.matches("(?s).*(支付成功|付款成功|成功付款|成功支付|支出|消费).*" );
+        boolean special=text.matches("(?s).*(退款|退回|撤销|失败|关闭|还款|提现|转账|余额|剩余|待支付|待付款|待收款|申请|处理中).*"), income=text.matches("(?s).*(收款|到账|收入).*"), expense=text.matches("(?s).*(支付成功|付款成功|成功付款|成功支付|已支付|已付款|支出|消费).*" );
         String type=!special&&income!=expense?(income?"income":"expense"):"";
         String reason=special?"特殊交易或包含余额，请核对类型及实际金额":type.isEmpty()?"收支方向不明确，请选择类型":"请核对金额、日期与分类";
         if(fen==0)reason="金额缺失或出现多个金额，请补充核对；"+reason;

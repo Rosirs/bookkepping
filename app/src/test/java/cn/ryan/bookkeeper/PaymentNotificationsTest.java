@@ -25,6 +25,9 @@ public class PaymentNotificationsTest {
     }
     @Test public void parsesIntegerFenButNeverGuessesAmbiguousAmounts() {
         var out=parse("微信支付","支付成功￥12.34");assertEquals(1234,out.fen());assertEquals("expense",out.type());
+        assertEquals("expense",parse("微信支付","[3条]微信支付: 已支付¥1.00").type());
+        assertEquals(100,parse("微信支付","[3条]微信支付: 已支付¥1.00").fen());
+        assertEquals("expense",parse("支付宝","已付款12元").type());
         assertEquals("income",parse("微信支付","收款到账100元").type());
         assertEquals(0,parse("支付宝交易提醒","消费12元，余额100元").fen());
         assertEquals(0,parse("微信支付","支付成功，金额已隐藏").fen());
@@ -82,7 +85,17 @@ public class PaymentNotificationsTest {
             assertEquals(1234,db.entries(null).getJSONObject(0).getLong("amount_fen"));
             db.capturePayment(wx,"two",System.currentTimeMillis(),parse("微信支付","退款到账10元"));
             new PaymentReview(a,db,()->{}).showRecords();records=org.robolectric.shadows.ShadowDialog.getLatestDialog();
-            find(records.getWindow().getDecorView(),"忽略这条").performClick();assertEquals(1,db.entries(null).length());
+            find(records.getWindow().getDecorView(),"忽略").performClick();assertEquals(1,db.entries(null).length());
+            db.capturePayment(wx,"three",System.currentTimeMillis(),parse("微信支付","退款到账10元"));
+            new PaymentReview(a,db,()->{}).showRecords();records=org.robolectric.shadows.ShadowDialog.getLatestDialog();
+            find(records.getWindow().getDecorView(),"核对并入账").performClick();
+            Dialog typeDirectEditor=org.robolectric.shadows.ShadowDialog.getLatestDialog();
+            assertNotNull(typeDirectEditor.findViewById(R.id.entry_save));
+            typeDirectEditor.dismiss();
+            db.capturePayment(wx,"four",System.currentTimeMillis(),parse("微信支付","已支付¥1.00"));
+            new PaymentReview(a,db,()->{}).showRecords();records=org.robolectric.shadows.ShadowDialog.getLatestDialog();
+            find(records.getWindow().getDecorView(),"直接入账").performClick();
+            assertEquals(2,db.entries(null).length());
         }
     }
     @Test @Config(sdk=26) public void settingsWorksOnAndroidEightAndOpensSystemAuthorization() {

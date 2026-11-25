@@ -53,6 +53,13 @@ public final class LedgerDb extends SQLiteOpenHelper {
         } finally {db.endTransaction();}
     }
     public synchronized void ignorePayment(String id) {ContentValues v=new ContentValues();v.put("status","ignored");getWritableDatabase().update("payment_candidates",v,"id=? AND status='pending'",new String[]{id});}
+    public synchronized void ignoreAllPendingPayments() {ContentValues v=new ContentValues();v.put("status","ignored");getWritableDatabase().update("payment_candidates",v,"status='pending'",null);}
+    public synchronized long[] pendingPaymentSummary() {
+        try(Cursor c=getReadableDatabase().rawQuery("SELECT COUNT(*), COALESCE(MAX(posted_at),0) FROM payment_candidates WHERE status='pending'",null)) {
+            if(c.moveToFirst())return new long[]{c.getLong(0),c.getLong(1)};
+        }
+        return new long[]{0,0};
+    }
     public synchronized void clearPaymentHistory() {getWritableDatabase().delete("payment_candidates",null,null);}
     private void createCategories(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE categories (type TEXT NOT NULL, name TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(type,name))");

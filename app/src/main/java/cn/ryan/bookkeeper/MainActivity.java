@@ -21,6 +21,7 @@ public final class MainActivity extends Activity {
     private int page=0;
     private LinearLayout root,content;
     private LocalApi api;
+    private long lastAutoPromptedPendingAt=-1;
     private final String[] typeLabels={"支出","收入","投资投入","投资收回"};
     @Override public void onCreate(Bundle state) {
         super.onCreate(state); db=new LedgerDb(this);
@@ -30,7 +31,17 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onSaveInstanceState(Bundle out) { super.onSaveInstanceState(out); out.putString("month",month.toString()); out.putInt("page",page); }
     @Override protected void onStop() { super.onStop(); stopApi(); }
-    @Override protected void onResume() { super.onResume(); ListeningKeepAliveService.sync(this); if(db!=null) render(); }
+    @Override protected void onResume() {
+        super.onResume(); ListeningKeepAliveService.sync(this);
+        if(db!=null) {
+            render();
+            long[] pending=db.pendingPaymentSummary();
+            if(pending[0]>0&&pending[1]>lastAutoPromptedPendingAt) {
+                lastAutoPromptedPendingAt=pending[1];
+                root.post(()->{ if(!isFinishing()) new PaymentReview(this,db,this::render).showRecords(); });
+            }
+        }
+    }
     @Override protected void onDestroy() { stopApi(); db.close(); super.onDestroy(); }
     private int dp(float n) { return (int)(n*getResources().getDisplayMetrics().density+0.5f); }
     private GradientDrawable shape(int color,int radius) { GradientDrawable g=new GradientDrawable();g.setColor(color);g.setCornerRadius(dp(radius));return g; }
@@ -72,6 +83,14 @@ public final class MainActivity extends Activity {
     }
     private void metric(LinearLayout parent,String label,long fen,int color,int size) { parent.addView(text(label,12,color,false));gap(parent,6);TextView value=text(LedgerRules.money(fen),size,color,true);value.setSingleLine(true);value.setAutoSizeTextTypeUniformWithConfiguration(12,size,1,android.util.TypedValue.COMPLEX_UNIT_SP);parent.addView(value); }
     private void ledger() throws Exception {
+        long[] pending=db.pendingPaymentSummary();
+        if(pending[0]>0) {
+            LinearLayout banner=row();banner.setBackground(shape(SOFT,16));banner.setPadding(dp(16),dp(12),dp(16),dp(12));
+            weighted(banner,text("有 "+pending[0]+" 笔动账待入账",14,PRIMARY,true));
+            banner.addView(text("去核对 ›",14,PRIMARY,true));
+            banner.setOnClickListener(v->new PaymentReview(this,db,this::render).showRecords());
+            content.addView(banner);gap(content,12);
+        }
         JSONObject sum=db.summary(month.toString());LinearLayout hero=card(content);hero.setBackground(new ParrotCardBackground(getResources()));
         hero.setClipToOutline(true);hero.setOutlineProvider(new ViewOutlineProvider(){@Override public void getOutline(View view,android.graphics.Outline outline){outline.setRoundRect(0,0,view.getWidth(),view.getHeight(),dp(22));}});
         hero.addView(text(month.getMonthValue()+"月 · 生活支出",13,HERO_MUTED,false));gap(hero,8);hero.addView(text("¥ "+LedgerRules.money(sum.getLong("expense_fen")),36,HERO_AMOUNT,true));gap(hero,22);
