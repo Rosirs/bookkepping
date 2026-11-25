@@ -159,11 +159,12 @@ public final class MainActivity extends Activity {
     }
     private void editor(JSONObject existing) {
         try {
-            new EntryEditor(this,existing,db::frequentCategories,(type,fen,date,category,note)->{
+            EntryEditor editor=new EntryEditor(this,existing,db,(type,fen,date,category,note)->{
                 db.save(existing==null?null:existing.getString("id"),type,fen,date,category,note);
                 month=YearMonth.from(LocalDate.parse(date));
                 render();
-            },()->{if(existing!=null){db.delete(existing.optString("id"));render();}}).show();
+            },()->{if(existing!=null){db.delete(existing.optString("id"));render();}});
+            editor.setOnDismissListener(d->render());editor.show();
         }catch(Exception e){error(e);}
     }
     private void settings() {

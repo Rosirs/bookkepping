@@ -14,14 +14,65 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 
 public final class LedgerDb extends SQLiteOpenHelper {
-    public LedgerDb(Context context) { super(context, "ledger.db", null, 2); }
+    public LedgerDb(Context context) { super(context, "ledger.db", null, 3); }
     @Override public void onCreate(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE entries (id TEXT PRIMARY KEY, type TEXT NOT NULL CHECK(type IN ('expense','income','invest','redeem')), amount_fen INTEGER NOT NULL CHECK(amount_fen>0 AND amount_fen<=999999999999), date TEXT NOT NULL, category TEXT NOT NULL, note TEXT NOT NULL)");
         db.execSQL("CREATE INDEX entries_date ON entries(date)");
         createBudgets(db);
+        createCategories(db);
     }
     private void createBudgets(SQLiteDatabase db) { db.execSQL("CREATE TABLE budgets (month TEXT PRIMARY KEY, amount_fen INTEGER NOT NULL CHECK(amount_fen>0 AND amount_fen<=999999999999))"); }
-    @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) { if(oldVersion<2)createBudgets(db); }
+    @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) { if(oldVersion<2)createBudgets(db); if(oldVersion<3)createCategories(db); }
+    private void createCategories(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE categories (type TEXT NOT NULL, name TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(type,name))");
+        String[][] defaults={{"餐饮","交通","购物","居家","娱乐","医疗","其他"},{"工资","奖金","兼职","红包","退款","利息","其他"},{"基金","股票","存款","黄金","债券","其他","投资"}};
+        for(int i=0;i<LedgerRules.TYPES.size();i++)for(String name:defaults[i==0?0:i==1?1:2]) {
+            ContentValues v=new ContentValues();v.put("type",LedgerRules.TYPES.get(i));v.put("name",name);db.insertOrThrow("categories",null,v);
+        }
+        db.execSQL("INSERT OR IGNORE INTO categories(type,name) SELECT DISTINCT type,category FROM entries");
+    }
+    private String categoryName(String type,String name) {
+        if(!LedgerRules.TYPES.contains(type))throw new IllegalArgumentException("未知账目类型");
+        if(name==null||name.trim().isEmpty()||name.trim().length()>40)throw new IllegalArgumentException("分类名称需为 1–40 个字");
+        return name.trim();
+    }
+    private void putCategory(String type,String name,boolean enabled) {
+        ContentValues v=new ContentValues();v.put("type",type);v.put("name",name);v.put("enabled",enabled?1:0);
+        SQLiteDatabase database=getWritableDatabase();
+        if(database.update("categories",v,"type=? AND name=?",new String[]{type,name})==0)database.insertOrThrow("categories",null,v);
+    }
+    public synchronized List<String> categories(String type) {
+        categoryName(type,"检查");List<String> result=new ArrayList<>();
+        try(Cursor c=getReadableDatabase().rawQuery("SELECT c.name FROM categories c LEFT JOIN entries e ON e.type=c.type AND e.category=c.name WHERE c.type=? AND c.enabled=1 GROUP BY c.name ORDER BY COUNT(e.id) DESC,MAX(e.date) DESC,c.rowid ASC",new String[]{type})) {while(c.moveToNext())result.add(c.getString(0));}
+        return result;
+    }
+    public synchronized void addCategory(String type,String name) {
+        name=categoryName(type,name);
+        if(categories(type).contains(name))throw new IllegalArgumentException("已有同名分类");
+        putCategory(type,name,true);
+    }
+    public synchronized void renameCategory(String type,String oldName,String newName) {
+        newName=categoryName(type,newName);
+        if(oldName.equals(newName))return;
+        List<String> names=categories(type);
+        if(!names.contains(oldName))throw new IllegalArgumentException("分类已不存在");
+        if(names.contains(newName))throw new IllegalArgumentException("已有同名分类");
+        SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
+        try {
+            putCategory(type,newName,true);
+            ContentValues v=new ContentValues();v.put("category",newName);db.update("entries",v,"type=? AND category=?",new String[]{type,oldName});
+            putCategory(type,oldName,false);db.setTransactionSuccessful();
+        } finally {db.endTransaction();}
+    }
+    public synchronized void deleteCategory(String type,String name,String replacement) {
+        List<String> names=categories(type);
+        if(name.equals(replacement)||!names.contains(name)||!names.contains(replacement))throw new IllegalArgumentException("请选择另一个分类接收账目");
+        SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
+        try {
+            ContentValues v=new ContentValues();v.put("category",replacement);db.update("entries",v,"type=? AND category=?",new String[]{type,name});
+            putCategory(type,name,false);db.setTransactionSuccessful();
+        } finally {db.endTransaction();}
+    }
     public synchronized long expenseOn(LocalDate day) {
         try(Cursor c=getReadableDatabase().rawQuery("SELECT COALESCE(SUM(amount_fen),0) FROM entries WHERE type='expense' AND date=?",new String[]{day.toString()})) { c.moveToFirst();return c.getLong(0); }
     }
@@ -43,6 +94,7 @@ public final class LedgerDb extends SQLiteOpenHelper {
     }
     public synchronized void save(String id, String type, long fen, String date, String category, String note) {
         LedgerRules.validate(type, fen, date, category, note);
+        putCategory(type,category.trim(),true);
         ContentValues values = new ContentValues();
         values.put("id", id == null ? UUID.randomUUID().toString() : id);
         values.put("type", type); values.put("amount_fen", fen); values.put("date", date);
@@ -91,13 +143,15 @@ public final class LedgerDb extends SQLiteOpenHelper {
     public synchronized JSONObject backup() throws Exception {
         JSONArray budgets=new JSONArray();
         try(Cursor c=getReadableDatabase().query("budgets",null,null,null,null,null,"month ASC")) {while(c.moveToNext())budgets.put(new JSONObject().put("month",c.getString(c.getColumnIndexOrThrow("month"))).put("amount_fen",c.getLong(c.getColumnIndexOrThrow("amount_fen"))));}
-        return new JSONObject().put("schema_version",2).put("currency","CNY").put("entries",entries(null)).put("budgets",budgets);
+        JSONArray categories=new JSONArray();
+        try(Cursor c=getReadableDatabase().query("categories",null,null,null,null,null,"rowid ASC")) {while(c.moveToNext())categories.put(new JSONObject().put("type",c.getString(0)).put("name",c.getString(1)).put("enabled",c.getInt(2)==1));}
+        return new JSONObject().put("schema_version",3).put("currency","CNY").put("entries",entries(null)).put("budgets",budgets).put("categories",categories);
     }
     public synchronized int restore(JSONObject backup) throws Exception {
         int version=backup.getInt("schema_version");
-        if ((version!=1&&version!=2) || !"CNY".equals(backup.getString("currency"))) throw new IllegalArgumentException("不支持的备份格式");
+        if ((version<1||version>3) || !"CNY".equals(backup.getString("currency"))) throw new IllegalArgumentException("不支持的备份格式");
         JSONArray rows=backup.getJSONArray("entries");
-        JSONArray budgets=version==2?backup.getJSONArray("budgets"):new JSONArray();
+        JSONArray budgets=version>=2?backup.getJSONArray("budgets"):new JSONArray();
         SQLiteDatabase db=getWritableDatabase(); db.beginTransaction();
         try {
             for(int i=0;i<rows.length();i++) {
@@ -111,6 +165,15 @@ public final class LedgerDb extends SQLiteOpenHelper {
                 JSONObject budget=budgets.getJSONObject(i);Object raw=budget.get("amount_fen");
                 if(!(raw instanceof Integer||raw instanceof Long))throw new IllegalArgumentException("预算必须为整数分");
                 setBudget(budget.getString("month"),budget.getLong("amount_fen"));
+            }
+            if(version>=3) {
+                JSONArray catalog=backup.getJSONArray("categories");
+                for(int i=0;i<catalog.length();i++) {
+                    JSONObject item=catalog.getJSONObject(i);String type=item.getString("type");
+                    putCategory(type,categoryName(type,item.getString("name")),item.getBoolean("enabled"));
+                }
+                // Merged local entries must always retain an available category.
+                db.execSQL("UPDATE categories SET enabled=1 WHERE EXISTS (SELECT 1 FROM entries WHERE entries.type=categories.type AND entries.category=categories.name)");
             }
             db.setTransactionSuccessful();
         } finally { db.endTransaction(); }

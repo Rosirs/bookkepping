@@ -24,8 +24,7 @@ import static cn.ryan.bookkeeper.UiColors.*;
 
 /** A compact entry sheet with a dedicated amount keypad and optional text editors. */
 final class EntryEditor extends Dialog {
-    interface CategorySource { List<String> categories(String type); }
-    private final CategorySource categorySource;
+    private final LedgerDb db;
     private List<String> options;
     interface OnSave { void save(String type,long fen,String date,String category,String note) throws Exception; }
     private final OnSave onSave;
@@ -40,14 +39,9 @@ final class EntryEditor extends Dialog {
     private Button saveButton;
     private LinearLayout categories;
     private final TextView[] typeButtons=new TextView[4];
-    private static final String[][] CATEGORIES={
-        {"餐饮","交通","购物","居家","娱乐","医疗","其他"},
-        {"工资","奖金","兼职","红包","退款","利息","其他"},
-        {"基金","股票","存款","黄金","债券","其他","投资"}
-    };
-    EntryEditor(Context context,JSONObject existing,CategorySource categorySource,OnSave onSave,Runnable onDelete) throws Exception {
+    EntryEditor(Context context,JSONObject existing,LedgerDb db,OnSave onSave,Runnable onDelete) throws Exception {
         super(context,R.style.EntrySheetTheme);
-        this.onSave=onSave;this.onDelete=onDelete;this.categorySource=categorySource;editing=existing!=null;
+        this.onSave=onSave;this.onDelete=onDelete;this.db=db;editing=existing!=null;
         type=editing?LedgerRules.TYPES.indexOf(existing.getString("type")):0;
         options=categoryOptions();
         category=editing?existing.getString("category"):options.get(0);
@@ -93,8 +87,9 @@ final class EntryEditor extends Dialog {
         amount.setShowSoftInputOnFocus(false);amount.setHint("0.00");amount.setText(initialAmount);amount.setSelectAllOnFocus(editing);money.addView(amount,new LinearLayout.LayoutParams(0,dp(64),1));sheet.addView(money);
         validation=label("",12,DANGER,false);validation.setVisibility(View.GONE);sheet.addView(validation);
         gap(sheet,14);
-        LinearLayout categoryHeading=row();categoryHeading.addView(label("分类",12,MUTED,false));sheet.addView(categoryHeading);gap(sheet,8);
-        categories=column();sheet.addView(categories);gap(sheet,12);
+        LinearLayout categoryHeading=row();categoryHeading.addView(label("分类",12,MUTED,false),new LinearLayout.LayoutParams(0,dp(36),1));
+        TextView allCategories=tap("全部分类 ›",PRIMARY,this::moreCategories);allCategories.setContentDescription("查看全部分类并管理");categoryHeading.addView(allCategories);sheet.addView(categoryHeading);gap(sheet,4);
+        categories=column();categories.setContentDescription("快捷分类");sheet.addView(categories);gap(sheet,12);
 
         LinearLayout details=row();dateButton=tap("",PRIMARY,this::pickDate);dateButton.setId(R.id.entry_date);dateButton.setBackground(shape(SOFT,12));details.addView(dateButton);
         View spacer=new View(getContext());details.addView(spacer,new LinearLayout.LayoutParams(dp(8),1));
@@ -122,36 +117,36 @@ final class EntryEditor extends Dialog {
     private void refresh() {
         for(int i=0;i<typeButtons.length;i++){boolean selected=i==type;typeButtons[i].setTextColor(selected?PRIMARY:MUTED);typeButtons[i].setTypeface(null,selected?Typeface.BOLD:Typeface.NORMAL);typeButtons[i].setBackground(shape(selected?Color.WHITE:Color.TRANSPARENT,10));}
         categories.removeAllViews();
-        boolean hiddenSelected=!options.subList(0,7).contains(category);
-        for(int r=0;r<2;r++) {
+        List<String> visible=new ArrayList<>(options.subList(0,Math.min(8,options.size())));
+        // Keep an edited or newly selected category visible even outside the frequent eight.
+        if(!visible.contains(category)) {
+            if(visible.size()==8)visible.set(7,category);else visible.add(category);
+        }
+        int columns=visible.size()<=4?visible.size():visible.size()<=6?3:4;
+        int rows=(visible.size()+columns-1)/columns;
+        for(int r=0;r<rows;r++) {
             LinearLayout line=row();
-            for(int c=0;c<4;c++) {
-                int index=r*4+c;boolean more=index==7;
-                String name=more?(hiddenSelected?category+" ▾":"更多 ▾"):options.get(index);
-                boolean selected=more?hiddenSelected:name.equals(category);
-                TextView tile=tap(name,selected?PRIMARY:INK,()->{if(more)moreCategories();else{category=name;refresh();}});
+            for(int c=0;c<columns;c++) {
+                int index=r*columns+c;
+                LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(38),1);if(c<columns-1)p.rightMargin=dp(8);
+                if(index>=visible.size()){line.addView(new View(getContext()),p);continue;}
+                String name=visible.get(index);boolean selected=name.equals(category);
+                TextView tile=tap(name,selected?PRIMARY:INK,()->{category=name;refresh();});
                 tile.setSingleLine(true);tile.setEllipsize(android.text.TextUtils.TruncateAt.END);tile.setTypeface(null,selected?Typeface.BOLD:Typeface.NORMAL);tile.setPadding(dp(4),0,dp(4),0);
                 GradientDrawable background=shape(selected?SOFT:BG,12);if(selected)background.setStroke(dp(1),PRIMARY);tile.setBackground(background);
-                tile.setContentDescription(more?"更多分类，当前："+category:"分类："+name);tile.setSelected(selected);
-                LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(38),1);if(c<3)p.rightMargin=dp(8);line.addView(tile,p);
+                tile.setContentDescription("分类："+name);tile.setSelected(selected);line.addView(tile,p);
             }
-            categories.addView(line);if(r==0)gap(categories,8);
+            categories.addView(line);if(r<rows-1)gap(categories,8);
         }
         dateButton.setText(date.equals(LocalDate.now())?"今天  ▾":date.getMonthValue()+"月"+date.getDayOfMonth()+"日  ▾");dateButton.setContentDescription("账目日期："+date);
         noteButton.setText(note.isEmpty()?"＋ 添加备注":note);noteButton.setContentDescription(note.isEmpty()?"添加备注":"修改备注："+note);
         saveButton.setText(new String[]{"保存支出","保存收入","保存投入","保存收回"}[type]);
     }
     private List<String> categoryOptions() {
-        LinkedHashSet<String> names=new LinkedHashSet<>(categorySource.categories(LedgerRules.TYPES.get(type)));
-        String[] defaults=CATEGORIES[type==0?0:type==1?1:2];
-        for(String name:defaults)names.add(name);
-        return new ArrayList<>(names);
+        return db.categories(LedgerRules.TYPES.get(type));
     }
     private void moreCategories() {
-        ArrayList<String> choices=new ArrayList<>(options);choices.add("＋ 自定义分类");
-        new AlertDialog.Builder(getContext()).setTitle("选择分类").setItems(choices.toArray(new String[0]),(d,index)->{
-            if(index==options.size())editCategory();else {category=options.get(index);refresh();}
-        }).setNegativeButton("取消",null).show();
+        new CategoryPicker(getContext(),db,LedgerRules.TYPES.get(type),category,name->{category=name;options=categoryOptions();refresh();}).show();
     }
     private void key(String key) {
         String current=amount.getText().toString();int start=Math.max(0,amount.getSelectionStart()),end=Math.max(start,amount.getSelectionEnd());
@@ -163,7 +158,6 @@ final class EntryEditor extends Dialog {
         amount.setText(next);amount.setSelection(Math.min(next.length(),start+key.length()+(current.isEmpty()&&key.equals(".")?1:0)));validation.setVisibility(View.GONE);
     }
     private void pickDate() {new DatePickerDialog(getContext(),(p,y,m,d)->{date=LocalDate.of(y,m+1,d);refresh();},date.getYear(),date.getMonthValue()-1,date.getDayOfMonth()).show();}
-    private void editCategory() {textEditor("自定义分类",category,40,value->{if(value.trim().isEmpty())throw new IllegalArgumentException("请输入分类名称");category=value.trim();refresh();});}
     private void editNote() {textEditor("写点备注",note,500,value->{note=value.trim();refresh();});}
     private interface OnText {void apply(String value);}
     private void textEditor(String title,String value,int limit,OnText apply) {

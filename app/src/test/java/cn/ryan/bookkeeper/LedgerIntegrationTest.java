@@ -82,10 +82,10 @@ public class LedgerIntegrationTest {
         add("expense",1800,"2026-11-24");JSONObject original=db.entries(null).getJSONObject(0);original.put("category","咖啡").put("note","早餐");db.restore(new JSONObject().put("schema_version",1).put("currency","CNY").put("entries",new JSONArray().put(original)));
         try(var activity=Robolectric.buildActivity(MainActivity.class).setup()) {
             final String id=original.getString("id");
-            EntryEditor editor=new EntryEditor(activity.get(),original,db::frequentCategories,(type,fen,date,category,note)->db.save(id,type,fen,date,category,note),()->db.delete(id));editor.show();
+            EntryEditor editor=new EntryEditor(activity.get(),original,db,(type,fen,date,category,note)->db.save(id,type,fen,date,category,note),()->db.delete(id));editor.show();
             android.view.View sheet=editor.getWindow().getDecorView();find(sheet,"2").performClick();find(sheet,"5").performClick();editor.findViewById(R.id.entry_save).performClick();
             JSONObject saved=db.entries(null).getJSONObject(0);assertEquals(2500,saved.getLong("amount_fen"));assertEquals("咖啡",saved.getString("category"));assertEquals("早餐",saved.getString("note"));assertEquals("2026-11-24",saved.getString("date"));
-            EntryEditor canceled=new EntryEditor(activity.get(),saved,db::frequentCategories,(type,fen,date,category,note)->fail("cancel must not save"),()->fail("cancel must not delete"));canceled.show();canceled.dismiss();assertEquals(1,db.entries(null).length());
+            EntryEditor canceled=new EntryEditor(activity.get(),saved,db,(type,fen,date,category,note)->fail("cancel must not save"),()->fail("cancel must not delete"));canceled.show();canceled.dismiss();assertEquals(1,db.entries(null).length());
         }
     }
     private android.view.View find(android.view.View v,String label) {

@@ -52,7 +52,7 @@ type 为 expense / income / invest / redeem。amount_fen 始终为正整数，�
 ## JSON 备份
 
 ```json
-{"schema_version":2,"currency":"CNY","entries":[],"budgets":[{"month":"2026-11","amount_fen":300000}]}
+{"schema_version":3,"currency":"CNY","entries":[],"budgets":[{"month":"2026-11","amount_fen":300000}],"categories":[{"type":"expense","name":"餐饮","enabled":true}]}
 ```
 
 entries 为上述相同结构。备份包含全部月份。通过系统文件选择器读写，无需存储权限。导入文件上限 4 MiB，按 id 合并；同 id 覆盖，未出现的现存账目保留。任一记录校验失败时整体回滚。导出的文件大小若超过导入限制，需拆为若干保留相同顶层结构的文件。
@@ -60,3 +60,5 @@ entries 为上述相同结构。备份包含全部月份。通过系统文件选
 0.2.0 起导出 schema_version 2，包含月预算。预算按 month 合并，同月份使用备份金额覆盖，未出现的月份保留。仍接受 schema_version 1 的旧账单备份，导入旧格式时保留手机上的现有预算。分类排序由已保存账目实时计算，因此无需独立备份排序计数。新格式不能导入旧版 0.1.0 应用。
 
 字段限制：金额 1–999999999999 分；分类 1–40 字符；备注最多 500 字符；日期必须真实有效。
+
+0.3.2 起导出 schema_version 3，增加独立分类目录 categories（type、name、enabled）。分类按类型与名称合并，enabled=false 记录已删除分类，恢复备份时不会重新出现。未被备份覆盖的本地分类保留；仍被合并后账目使用的分类保持可用。仍支持导入版本 1、2；旧版应用无法导入版本 3。改名同步该类型的历史账目，删除分类时将历史账目移入用户选定的同类型分类，不删除账单。

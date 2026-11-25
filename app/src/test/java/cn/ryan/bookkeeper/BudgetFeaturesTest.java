@@ -43,7 +43,7 @@ public class BudgetFeaturesTest {
         db.removeBudget("2026-11");assertEquals(0,db.budgetFen("2026-11"));assertEquals(20000,db.budgetFen("2026-12"));
     }
     @Test public void backupRoundTripsBudgetsAndLegacyImportsKeepExistingBudget() throws Exception {
-        db.setBudget("2026-11",10000);add("expense",123,"2026-11-24","餐饮");JSONObject backup=db.backup();assertEquals(2,backup.getInt("schema_version"));db.removeBudget("2026-11");db.restore(backup);assertEquals(10000,db.budgetFen("2026-11"));assertEquals(1,db.entries(null).length());
+        db.setBudget("2026-11",10000);add("expense",123,"2026-11-24","餐饮");JSONObject backup=db.backup();assertEquals(3,backup.getInt("schema_version"));db.removeBudget("2026-11");db.restore(backup);assertEquals(10000,db.budgetFen("2026-11"));assertEquals(1,db.entries(null).length());
         db.restore(new JSONObject().put("schema_version",1).put("currency","CNY").put("entries",new JSONArray()));assertEquals(10000,db.budgetFen("2026-11"));
         backup.getJSONArray("entries").getJSONObject(0).put("amount_fen",456);
         backup.getJSONArray("budgets").getJSONObject(0).put("amount_fen",20000);
@@ -78,7 +78,7 @@ public class BudgetFeaturesTest {
         add("expense",100,"2026-11-24","咖啡");
         try(var activity=Robolectric.buildActivity(MainActivity.class).setup()) {
             find(activity.get().findViewById(android.R.id.content),"＋  记一笔").performClick();Dialog dialog=ShadowDialog.getLatestDialog();View sheet=dialog.getWindow().getDecorView();assertTrue(find(sheet,"咖啡").isSelected());
-            find(sheet,"更多 ▾").performClick();AlertDialog more=(AlertDialog)ShadowDialog.getLatestDialog();assertEquals("其他",more.getListView().getAdapter().getItem(7));more.dismiss();
+            find(sheet,"全部分类 ›").performClick();Dialog more=ShadowDialog.getLatestDialog();assertNotNull(find(more.getWindow().getDecorView(),"其他"));more.dismiss();
             find(sheet,"1").performClick();dialog.findViewById(R.id.entry_save).performClick();assertEquals("咖啡",db.frequentCategories("expense").get(0));
         }
     }
