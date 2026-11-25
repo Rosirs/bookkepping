@@ -30,7 +30,7 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onSaveInstanceState(Bundle out) { super.onSaveInstanceState(out); out.putString("month",month.toString()); out.putInt("page",page); }
     @Override protected void onStop() { super.onStop(); stopApi(); }
-    @Override protected void onResume() { super.onResume(); if(db!=null) render(); }
+    @Override protected void onResume() { super.onResume(); ListeningKeepAliveService.sync(this); if(db!=null) render(); }
     @Override protected void onDestroy() { stopApi(); db.close(); super.onDestroy(); }
     private int dp(float n) { return (int)(n*getResources().getDisplayMetrics().density+0.5f); }
     private GradientDrawable shape(int color,int radius) { GradientDrawable g=new GradientDrawable();g.setColor(color);g.setCornerRadius(dp(radius));return g; }
@@ -169,6 +169,7 @@ public final class MainActivity extends Activity {
     }
     private void settings() {
         LinearLayout about=card(content);about.addView(text("简单记，心里有数。",23,INK,true));gap(about,12);about.addView(text("无需账号 · 无广告 · 本地保存\n金额以人民币「分」精确存储。\n卸载前请导出备份。",14,MUTED,false));gap(content,20);
+        new PaymentReview(this,db,this::render).addSettings(content);gap(content,24);
         content.addView(text("数据由你掌握",18,INK,true));gap(content,12);
         content.addView(button("导出 JSON 备份",()->{Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/json");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"own-ledger-"+LocalDate.now()+".json");startActivityForResult(i,10);},false));gap(content,10);
         content.addView(button("导入 JSON 备份",()->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("application/json");i.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,11);},false));gap(content,8);content.addView(text("导入按账目 ID 合并，同 ID 使用备份内容覆盖。",12,MUTED,false));gap(content,24);

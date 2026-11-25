@@ -47,7 +47,7 @@ final class EntryEditor extends Dialog {
         category=editing?existing.getString("category"):options.get(0);
         note=editing?existing.getString("note"):"";
         date=editing?LocalDate.parse(existing.getString("date")):LocalDate.now();
-        initialAmount=editing?LedgerRules.money(existing.getLong("amount_fen")):"";
+        initialAmount=editing&&existing.getLong("amount_fen")>0?LedgerRules.money(existing.getLong("amount_fen")):"";
     }
     private int dp(float n) {return (int)(n*getContext().getResources().getDisplayMetrics().density+0.5f);}
     private LinearLayout column() {LinearLayout v=new LinearLayout(getContext());v.setOrientation(LinearLayout.VERTICAL);return v;}
@@ -71,8 +71,8 @@ final class EntryEditor extends Dialog {
         LinearLayout sheet=column();sheet.setPadding(dp(20),dp(10),dp(20),dp(16));
         GradientDrawable surface=shape(Color.WHITE,0);surface.setCornerRadii(new float[]{dp(28),dp(28),dp(28),dp(28),0,0,0,0});sheet.setBackground(surface);
         View handle=new View(getContext());handle.setBackground(shape(LINE,3));LinearLayout.LayoutParams handleParams=new LinearLayout.LayoutParams(dp(32),dp(4));handleParams.gravity=Gravity.CENTER;sheet.addView(handle,handleParams);gap(sheet,8);
-        LinearLayout heading=row();heading.addView(label(editing?"编辑这笔账":"记一笔",20,INK,true),new LinearLayout.LayoutParams(0,dp(40),1));
-        if(editing){TextView delete=tap("删除",DANGER,this::confirmDelete);delete.setId(R.id.entry_delete);heading.addView(delete);}
+        LinearLayout heading=row();heading.addView(label(editing?(onDelete==null?"核对并确认入账":"编辑这笔账"):"记一笔",20,INK,true),new LinearLayout.LayoutParams(0,dp(40),1));
+        if(editing&&onDelete!=null){TextView delete=tap("删除",DANGER,this::confirmDelete);delete.setId(R.id.entry_delete);heading.addView(delete);}
         TextView close=tap("×",MUTED,this::dismiss);close.setTextSize(26);close.setContentDescription("关闭记账面板");heading.addView(close,new LinearLayout.LayoutParams(dp(44),dp(44)));sheet.addView(heading);gap(sheet,8);
 
         LinearLayout segments=row();segments.setPadding(dp(4),dp(4),dp(4),dp(4));segments.setBackground(shape(BG,14));

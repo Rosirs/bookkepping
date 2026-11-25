@@ -14,15 +14,46 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 
 public final class LedgerDb extends SQLiteOpenHelper {
-    public LedgerDb(Context context) { super(context, "ledger.db", null, 3); }
+    public LedgerDb(Context context) { super(context, "ledger.db", null, 4); }
     @Override public void onCreate(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE entries (id TEXT PRIMARY KEY, type TEXT NOT NULL CHECK(type IN ('expense','income','invest','redeem')), amount_fen INTEGER NOT NULL CHECK(amount_fen>0 AND amount_fen<=999999999999), date TEXT NOT NULL, category TEXT NOT NULL, note TEXT NOT NULL)");
         db.execSQL("CREATE INDEX entries_date ON entries(date)");
         createBudgets(db);
         createCategories(db);
+        createPayments(db);
     }
     private void createBudgets(SQLiteDatabase db) { db.execSQL("CREATE TABLE budgets (month TEXT PRIMARY KEY, amount_fen INTEGER NOT NULL CHECK(amount_fen>0 AND amount_fen<=999999999999))"); }
-    @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) { if(oldVersion<2)createBudgets(db); if(oldVersion<3)createCategories(db); }
+    @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) { if(oldVersion<2)createBudgets(db); if(oldVersion<3)createCategories(db); if(oldVersion<4)createPayments(db); }
+    private void createPayments(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE payment_candidates (id TEXT PRIMARY KEY, source TEXT NOT NULL, event_key TEXT NOT NULL, posted_at INTEGER NOT NULL, amount_fen INTEGER NOT NULL, type TEXT NOT NULL, evidence TEXT NOT NULL, reason TEXT NOT NULL, rule TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', entry_id TEXT)");
+        db.execSQL("CREATE INDEX payment_event ON payment_candidates(source,event_key,posted_at)");
+    }
+    public synchronized void capturePayment(String source,String key,long posted,PaymentNotificationParser.Result result) {
+        SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
+        try {
+            // Only an identical event is collapsed: equal-price new payments must remain reviewable.
+            try(Cursor c=db.rawQuery("SELECT id FROM payment_candidates WHERE source=? AND event_key=? AND evidence=? AND posted_at=?",new String[]{source,key,result.evidence(),Long.toString(posted)})) {if(c.moveToFirst()){db.setTransactionSuccessful();return;}}
+            ContentValues v=new ContentValues();v.put("id",UUID.randomUUID().toString());v.put("source",source);v.put("event_key",key);v.put("posted_at",posted);v.put("amount_fen",result.fen());v.put("type",result.type());v.put("evidence",result.evidence());v.put("reason",result.reason());v.put("rule",PaymentNotificationParser.RULE);
+            db.insertOrThrow("payment_candidates",null,v);db.setTransactionSuccessful();
+        } finally {db.endTransaction();}
+    }
+    public synchronized JSONArray paymentCandidates() throws Exception {
+        JSONArray rows=new JSONArray();
+        try(Cursor c=getReadableDatabase().query("payment_candidates",null,null,null,null,null,"posted_at DESC, rowid DESC")) {
+            while(c.moveToNext()) {JSONObject row=new JSONObject();for(String key:new String[]{"id","source","event_key","type","evidence","reason","rule","status","entry_id"})row.put(key,c.isNull(c.getColumnIndexOrThrow(key))?JSONObject.NULL:c.getString(c.getColumnIndexOrThrow(key)));row.put("amount_fen",c.getLong(c.getColumnIndexOrThrow("amount_fen")));row.put("posted_at",c.getLong(c.getColumnIndexOrThrow("posted_at")));rows.put(row);}
+        }
+        return rows;
+    }
+    public synchronized void confirmPayment(String id,String type,long fen,String date,String category,String note) {
+        SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
+        try {
+            try(Cursor c=db.query("payment_candidates",new String[]{"status"},"id=?",new String[]{id},null,null,null)) {if(!c.moveToFirst()||!"pending".equals(c.getString(0)))throw new IllegalArgumentException("这条提醒已处理");}
+            String entryId=UUID.randomUUID().toString();save(entryId,type,fen,date,category,note);
+            ContentValues v=new ContentValues();v.put("status","confirmed");v.put("entry_id",entryId);db.update("payment_candidates",v,"id=?",new String[]{id});db.setTransactionSuccessful();
+        } finally {db.endTransaction();}
+    }
+    public synchronized void ignorePayment(String id) {ContentValues v=new ContentValues();v.put("status","ignored");getWritableDatabase().update("payment_candidates",v,"id=? AND status='pending'",new String[]{id});}
+    public synchronized void clearPaymentHistory() {getWritableDatabase().delete("payment_candidates",null,null);}
     private void createCategories(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE categories (type TEXT NOT NULL, name TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(type,name))");
         String[][] defaults={{"餐饮","交通","购物","居家","娱乐","医疗","其他"},{"工资","奖金","兼职","红包","退款","利息","其他"},{"基金","股票","存款","黄金","债券","其他","投资"}};
